@@ -14,8 +14,9 @@
     <Transition name="fade">
       <span v-if="showLabel" class="note-label" :class="labelClass">
         {{ note.name }}
-        <span v-if="note.octave === 'малая'" class="octave">м.</span>
-        <span v-else-if="note.octave === '2'" class="octave">²</span>
+        <span v-if="note.accidental === '#'" class="accidental">♯</span>
+        <span v-else-if="note.accidental === 'b'" class="accidental">♭</span>
+        <span v-if="note.octave" class="octave">{{ note.octave }}</span>
       </span>
     </Transition>
   </div>
@@ -36,16 +37,6 @@ const emit = defineEmits(['click'])
 const gameStore = useGameStore()
 const canvasRef = ref(null)
 
-const NOTE_COLORS = {
-  'до': '#ef4444',
-  'ре': '#f97316',
-  'ми': '#eab308',
-  'фа': '#22c55e',
-  'соль': '#0ea5e9',
-  'ля': '#3b82f6',
-  'си': '#a855f7',
-}
-
 const NOTE_BG_COLORS = {
   'до': '#fee2e2',
   'ре': '#ffedd5',
@@ -63,30 +54,30 @@ const noteState = computed(() => {
 const showLabel = computed(() => {
   const diff = gameStore.difficulty
 
-  // beginner и easy: подписи видны сразу
-  if (diff === 'beginner' || diff === 'easy') return true
+  if (gameStore.version === 'v1') {
+    if (diff === 'beginner') return true
+    if (diff === 'easy') return noteState.value.correct
+    return false
+  }
 
-  // medium: подписи только после правильного нажатия
-  if (diff === 'medium') return noteState.value.correct
+  if (diff === 'beginner' || diff === 'easy') return true
+  if (diff === 'medium' || diff === 'hard' || diff === 'master') {
+    return noteState.value.correct
+  }
 
   return false
 })
 
 const cardClasses = computed(() => {
   const classes = []
-
-  if (noteState.value.correct) {
-    classes.push('correct')
-  } else if (noteState.value.temp) {
-    classes.push('wrong')
-  }
-
+  if (noteState.value.correct) classes.push('correct')
+  else if (noteState.value.temp) classes.push('wrong')
   return classes
 })
 
 const cardStyle = computed(() => {
-  // Цвет фона для beginner уровня или после правильного ответа
-  if (gameStore.difficulty === 'beginner' || noteState.value.correct) {
+  const isBeginner = gameStore.difficulty === 'beginner'
+  if (isBeginner || noteState.value.correct) {
     return { backgroundColor: NOTE_BG_COLORS[props.note.name] || 'white' }
   }
   return {}
@@ -98,6 +89,22 @@ const labelClass = computed(() => {
   return ''
 })
 
+function drawTrebleClef(ctx, x, y) {
+  ctx.font = '36px serif'
+  ctx.fillStyle = '#374151'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('𝄞', x, y)
+}
+
+function drawBassClef(ctx, x, y) {
+  ctx.font = '32px serif'
+  ctx.fillStyle = '#374151'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText('𝄢', x, y)
+}
+
 function drawNote() {
   const canvas = canvasRef.value
   if (!canvas) return
@@ -106,15 +113,14 @@ function drawNote() {
   ctx.clearRect(0, 0, canvas.width, canvas.height)
 
   const isTreble = gameStore.clef === 'treble'
-  const startX = 20
-  const startY = 45
-  const lineSpacing = 10
-  const lineWidth = 80
+  const startX = 25
+  const startY = 50
+  const lineSpacing = 8
+  const lineWidth = 70
 
-  // Рисуем 5 линий стана
+  // 1. Рисуем 5 линий стана
   ctx.strokeStyle = '#374151'
-  ctx.lineWidth = 1.5
-
+  ctx.lineWidth = 1
   for (let i = 0; i < 5; i++) {
     const y = startY + (i * lineSpacing)
     ctx.beginPath()
@@ -123,48 +129,58 @@ function drawNote() {
     ctx.stroke()
   }
 
-  // Рисуем ключ
-  ctx.font = 'bold 28px serif'
-  ctx.fillStyle = '#374151'
+  // 2. Рисуем ключ
   if (isTreble) {
-    ctx.fillText('', startX - 8, startY + 28)
+    drawTrebleClef(ctx, startX - 5, startY + 16)
   } else {
-    ctx.fillText('', startX - 8, startY + 30)
+    drawBassClef(ctx, startX - 5, startY + 16)
   }
 
-  // Позиция ноты
+  // 3. Вычисляем позицию ноты
   const position = props.note.position ?? 0
-
   const noteY = startY + (position * lineSpacing / 2)
-  const noteX = startX + lineWidth / 2 + 15
+  const noteX = startX + lineWidth / 2 + 10
 
-  // Рисуем добавочную линию если нужно
-  if (props.note.ledger) {
+  // 4. Рисуем добавочную линию (ТОЛЬКО если нота за пределами стана)
+  // position 0 = верхняя линия (Y=50), position 8 = нижняя линия (Y=82)
+  if (position < 0 || position > 8) {
     ctx.beginPath()
     ctx.moveTo(noteX - 10, noteY)
     ctx.lineTo(noteX + 10, noteY)
     ctx.stroke()
   }
 
-  // Рисуем ноту (овал)
+  // 5. Рисуем знак альтерации (диез/бемоль)
+  if (props.note.accidental) {
+    ctx.font = 'bold 18px serif'
+    ctx.fillStyle = '#1f2937'
+    ctx.textAlign = 'right'
+    ctx.textBaseline = 'middle'
+    const accidentalSymbol = props.note.accidental === '#' ? '♯' : '♭'
+    ctx.fillText(accidentalSymbol, noteX - 8, noteY + 2) // Чуть поднял для идеального центрирования
+  }
+
+  // 6. Рисуем головку ноты (овал)
   ctx.fillStyle = '#1f2937'
   ctx.beginPath()
-  ctx.ellipse(noteX, noteY, 7, 5, Math.PI / 6, 0, Math.PI * 2)
+  ctx.ellipse(noteX, noteY, 6, 4.5, Math.PI / 6, 0, Math.PI * 2)
   ctx.fill()
 
-  // Рисуем штиль
+  // 7. Рисуем штиль
+  // position < 3 (выше средней линии) -> штиль вверх. Иначе -> штиль вниз.
   const stemDirection = position < 3 ? 1 : -1
+  ctx.strokeStyle = '#1f2937'
+  ctx.lineWidth = 1.5
+  ctx.beginPath()
+
   if (stemDirection === 1) {
-    ctx.beginPath()
     ctx.moveTo(noteX + 5, noteY)
-    ctx.lineTo(noteX + 5, noteY - 35)
-    ctx.stroke()
+    ctx.lineTo(noteX + 5, noteY - 30)
   } else {
-    ctx.beginPath()
     ctx.moveTo(noteX - 5, noteY)
-    ctx.lineTo(noteX - 5, noteY + 35)
-    ctx.stroke()
+    ctx.lineTo(noteX - 5, noteY + 30)
   }
+  ctx.stroke()
 }
 
 function handleClick() {
@@ -177,11 +193,10 @@ onMounted(() => {
   setTimeout(() => drawNote(), 100)
 })
 
-watch(() => [props.note, gameStore.difficulty, gameStore.clef], () => {
+watch(() => [props.note, gameStore.difficulty, gameStore.clef, gameStore.version], () => {
   nextTick(() => drawNote())
 }, { deep: true })
 </script>
-
 <style scoped>
 .note-card {
   display: flex;
@@ -232,7 +247,6 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef], () => {
   display: block;
 }
 
-/* Красивая подпись ноты */
 .note-label {
   position: absolute;
   bottom: 8px;
@@ -249,12 +263,20 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef], () => {
   white-space: nowrap;
   backdrop-filter: blur(4px);
   border: 1px solid rgba(255, 255, 255, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.note-label .accidental {
+  font-size: 16px;
+  font-weight: bold;
+  font-style: normal;
 }
 
 .note-label .octave {
   font-size: 11px;
   font-weight: 600;
-  margin-left: 2px;
   opacity: 0.7;
   font-style: normal;
 }
@@ -271,7 +293,6 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef], () => {
   border-color: rgba(239, 68, 68, 0.3);
 }
 
-/* Анимация появления */
 .fade-enter-active,
 .fade-leave-active {
   transition: all 0.3s ease;
@@ -302,9 +323,11 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef], () => {
   .note-label {
     font-size: 12px;
     padding: 3px 10px;
-    bottom: -4px;
-    z-index: 10;
-    left: 27px;
+    bottom: 6px;
+  }
+
+  .note-label .accidental {
+    font-size: 14px;
   }
 
   .note-label .octave {

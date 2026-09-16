@@ -1,108 +1,146 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
-// === V1: Скрипичный + Басовый ключи (3 уровня) ===
-const TREBLE_NOTES_V1 = [
-    { name: 'до', key: 'C', position: 0, octave: '1', ledger: true },
-    { name: 'ре', key: 'D', position: 1, octave: '1' },
-    { name: 'ми', key: 'E', position: 2, octave: '1' },
-    { name: 'фа', key: 'F', position: 3, octave: '1' },
-    { name: 'соль', key: 'G', position: 4, octave: '1' },
+// ==========================================
+// ДАННЫЕ НОТ (Позиции рассчитаны для формулы: Y = 50 + (position * 4))
+// position 0 = верхняя (5-я) линия стана (Y=50)
+// position 8 = нижняя (1-я) линия стана (Y=82)
+// position < 0 = выше стана (добавочная линия)
+// position > 8 = ниже стана (добавочная линия)
+// ==========================================
+
+// === V1 Скрипичный ключ: НАЧИНАЮЩИЙ (строго внутри стана, 1-я октава) ===
+const TREBLE_NOTES_V1_BEGINNER = [
+    { name: 'ми', key: 'E', position: 8, octave: '1' },   // 1-я линия снизу
+    { name: 'фа', key: 'F', position: 7, octave: '1' },   // 1-е пространство
+    { name: 'соль', key: 'G', position: 6, octave: '1' }, // 2-я линия
+    { name: 'ля', key: 'A', position: 5, octave: '1' },   // 2-е пространство
+    { name: 'си', key: 'B', position: 4, octave: '1' },   // 3-я линия
+    { name: 'до', key: 'C', position: 3, octave: '2' },   // 3-е пространство (верх стана)
+]
+
+// === V1 Басовый ключ: НАЧИНАЮЩИЙ (строго внутри стана, малая октава) ===
+const BASS_NOTES_V1_BEGINNER = [
+    { name: 'до', key: 'C', position: 5, octave: 'малая' }, // 2-е пространство снизу
+    { name: 'ре', key: 'D', position: 4, octave: 'малая' }, // 3-я линия
+    { name: 'ми', key: 'E', position: 3, octave: 'малая' }, // 3-е пространство
+    { name: 'фа', key: 'F', position: 2, octave: 'малая' }, // 4-я линия
+    { name: 'соль', key: 'G', position: 1, octave: 'малая' }, // 4-е пространство
+    { name: 'ля', key: 'A', position: 0, octave: 'малая' },   // 5-я линия (верхняя)
+]
+
+// === V1 Скрипичный ключ: ЛЕГКО и СРЕДНЕ (добавляем крайние ноты) ===
+const TREBLE_NOTES_V1_ADVANCED = [
+    { name: 'до', key: 'C', position: 10, octave: '1', ledger: true }, // добавочная снизу
+    { name: 'ре', key: 'D', position: 9, octave: '1' },                // под станом
+    ...TREBLE_NOTES_V1_BEGINNER,
+]
+
+// === V1 Басовый ключ: ЛЕГКО и СРЕДНЕ (добавляем крайние ноты) ===
+const BASS_NOTES_V1_ADVANCED = [
+    ...BASS_NOTES_V1_BEGINNER,
+    { name: 'си', key: 'B', position: -1, octave: 'малая' },           // над станом
+    { name: 'до', key: 'C', position: -2, octave: '1', ledger: true }, // добавочная сверху
+]
+
+// === V2 Уровень 1 (Начинающий): Базовый диапазон внутри стана ===
+const TREBLE_NOTES_V2_BEGINNER = [
+    { name: 'ми', key: 'E', position: 8, octave: '1' },
+    { name: 'фа', key: 'F', position: 7, octave: '1' },
+    { name: 'соль', key: 'G', position: 6, octave: '1' },
     { name: 'ля', key: 'A', position: 5, octave: '1' },
-    { name: 'си', key: 'B', position: 6, octave: '1' },
-    { name: 'до', key: 'C', position: 7, octave: '2' },
+    { name: 'си', key: 'B', position: 4, octave: '1' },
+    { name: 'до', key: 'C', position: 3, octave: '2' },
 ]
 
-const BASS_NOTES_V1 = [
-    { name: 'до', key: 'C', position: 2.5, octave: 'малая' },
-    { name: 'ре', key: 'D', position: 3, octave: 'малая' },
-    { name: 'ми', key: 'E', position: 3.5, octave: 'малая' },
-    { name: 'фа', key: 'F', position: 4, octave: 'малая' },
-    { name: 'соль', key: 'G', position: 4.5, octave: 'малая' },
-    { name: 'ля', key: 'A', position: 5, octave: 'малая' },
-    { name: 'си', key: 'B', position: 5.5, octave: 'малая' },
-    { name: 'до', key: 'C', position: 6, octave: '1', ledger: true },
-]
-
-// === V2: Только скрипичный ключ (5 уровней) ===
+// === V2 Уровни 2-3: До 2-й → До 3-й октавы ===
 const TREBLE_NOTES_V2_2_3 = [
-    { name: 'до', key: 'C', position: 7, octave: '2' },
-    { name: 'ре', key: 'D', position: 8, octave: '2' },
-    { name: 'ми', key: 'E', position: 9, octave: '2', ledger: true },
-    { name: 'фа', key: 'F', position: 10, octave: '2', ledger: true },
-    { name: 'соль', key: 'G', position: 11, octave: '2', ledger: true },
-    { name: 'ля', key: 'A', position: 12, octave: '2', ledger: true },
-    { name: 'си', key: 'B', position: 13, octave: '2', ledger: true },
-    { name: 'до', key: 'C', position: 14, octave: '3', ledger: true },
+    { name: 'до', key: 'C', position: 3, octave: '2' },
+    { name: 'ре', key: 'D', position: 2, octave: '2' },
+    { name: 'ми', key: 'E', position: 1, octave: '2' },
+    { name: 'фа', key: 'F', position: 0, octave: '2' },
+    { name: 'соль', key: 'G', position: -1, octave: '2', ledger: true },
+    { name: 'ля', key: 'A', position: -2, octave: '2', ledger: true },
+    { name: 'си', key: 'B', position: -3, octave: '2', ledger: true },
+    { name: 'до', key: 'C', position: -4, octave: '3', ledger: true },
 ]
 
+// === V2 Уровень 4 (Сложно): До 1-й → До 3-й (15 нот) ===
 const TREBLE_NOTES_V2_1_3 = [
-    { name: 'до', key: 'C', position: 0, octave: '1', ledger: true },
-    { name: 'ре', key: 'D', position: 1, octave: '1' },
-    { name: 'ми', key: 'E', position: 2, octave: '1' },
-    { name: 'фа', key: 'F', position: 3, octave: '1' },
-    { name: 'соль', key: 'G', position: 4, octave: '1' },
+    { name: 'до', key: 'C', position: 10, octave: '1', ledger: true },
+    { name: 'ре', key: 'D', position: 9, octave: '1' },
+    { name: 'ми', key: 'E', position: 8, octave: '1' },
+    { name: 'фа', key: 'F', position: 7, octave: '1' },
+    { name: 'соль', key: 'G', position: 6, octave: '1' },
     { name: 'ля', key: 'A', position: 5, octave: '1' },
-    { name: 'си', key: 'B', position: 6, octave: '1' },
-    { name: 'до', key: 'C', position: 7, octave: '2' },
-    { name: 'ре', key: 'D', position: 8, octave: '2' },
-    { name: 'ми', key: 'E', position: 9, octave: '2', ledger: true },
-    { name: 'фа', key: 'F', position: 10, octave: '2', ledger: true },
-    { name: 'соль', key: 'G', position: 11, octave: '2', ledger: true },
-    { name: 'ля', key: 'A', position: 12, octave: '2', ledger: true },
-    { name: 'си', key: 'B', position: 13, octave: '2', ledger: true },
-    { name: 'до', key: 'C', position: 14, octave: '3', ledger: true },
+    { name: 'си', key: 'B', position: 4, octave: '1' },
+    { name: 'до', key: 'C', position: 3, octave: '2' },
+    { name: 'ре', key: 'D', position: 2, octave: '2' },
+    { name: 'ми', key: 'E', position: 1, octave: '2' },
+    { name: 'фа', key: 'F', position: 0, octave: '2' },
+    { name: 'соль', key: 'G', position: -1, octave: '2', ledger: true },
+    { name: 'ля', key: 'A', position: -2, octave: '2', ledger: true },
+    { name: 'си', key: 'B', position: -3, octave: '2', ledger: true },
+    { name: 'до', key: 'C', position: -4, octave: '3', ledger: true },
 ]
 
+// === V2 Уровень 5 (Мастер): Хроматическая гамма ВВЕРХ (25 нот) ===
 const CHROMATIC_UP = [
-    { name: 'до', accidental: null, position: 0, octave: '1', ledger: true },
-    { name: 'до', accidental: '#', position: 0.5, octave: '1', ledger: true },
-    { name: 'ре', accidental: null, position: 1, octave: '1' },
-    { name: 'ре', accidental: '#', position: 1.5, octave: '1' },
-    { name: 'ми', accidental: null, position: 2, octave: '1' },
-    { name: 'фа', accidental: null, position: 3, octave: '1' },
-    { name: 'фа', accidental: '#', position: 3.5, octave: '1' },
-    { name: 'соль', accidental: null, position: 4, octave: '1' },
-    { name: 'соль', accidental: '#', position: 4.5, octave: '1' },
+    { name: 'до', accidental: null, position: 10, octave: '1', ledger: true },
+    { name: 'до', accidental: '#', position: 9.5, octave: '1', ledger: true },
+    { name: 'ре', accidental: null, position: 9, octave: '1' },
+    { name: 'ре', accidental: '#', position: 8.5, octave: '1' },
+    { name: 'ми', accidental: null, position: 8, octave: '1' },
+    { name: 'фа', accidental: null, position: 7, octave: '1' },
+    { name: 'фа', accidental: '#', position: 6.5, octave: '1' },
+    { name: 'соль', accidental: null, position: 6, octave: '1' },
+    { name: 'соль', accidental: '#', position: 5.5, octave: '1' },
+    { name: 'ля', accidental: null, position: 5, octave: '1' },
+    { name: 'си', accidental: 'b', position: 4.5, octave: '1' },
+    { name: 'си', accidental: null, position: 4, octave: '1' },
+    { name: 'до', accidental: null, position: 3, octave: '2' },
+    { name: 'до', accidental: '#', position: 2.5, octave: '2' },
+    { name: 'ре', accidental: null, position: 2, octave: '2' },
+    { name: 'ре', accidental: '#', position: 1.5, octave: '2' },
+    { name: 'ми', accidental: null, position: 1, octave: '2' },
+    { name: 'фа', accidental: null, position: 0, octave: '2' },
+    { name: 'фа', accidental: '#', position: -0.5, octave: '2' },
+    { name: 'соль', accidental: null, position: -1, octave: '2', ledger: true },
+    { name: 'соль', accidental: '#', position: -1.5, octave: '2', ledger: true },
+    { name: 'ля', accidental: null, position: -2, octave: '2', ledger: true },
+    { name: 'си', accidental: 'b', position: -2.5, octave: '2', ledger: true },
+    { name: 'си', accidental: null, position: -3, octave: '2', ledger: true },
+    { name: 'до', accidental: null, position: -4, octave: '3', ledger: true },
+]
+
+// === V2 Уровень 5 (Мастер): Хроматическая гамма ВНИЗ (25 нот) ===
+const CHROMATIC_DOWN = [
+    { name: 'до', accidental: null, position: -4, octave: '3', ledger: true },
+    { name: 'си', accidental: null, position: -3, octave: '2', ledger: true },
+    { name: 'си', accidental: 'b', position: -2.5, octave: '2', ledger: true },
+    { name: 'ля', accidental: null, position: -2, octave: '2', ledger: true },
+    { name: 'ля', accidental: 'b', position: -1.5, octave: '2', ledger: true },
+    { name: 'соль', accidental: null, position: -1, octave: '2', ledger: true },
+    { name: 'фа', accidental: '#', position: -0.5, octave: '2' },
+    { name: 'фа', accidental: null, position: 0, octave: '2' },
+    { name: 'ми', accidental: null, position: 1, octave: '2' },
+    { name: 'ми', accidental: 'b', position: 1.5, octave: '2' },
+    { name: 'ре', accidental: null, position: 2, octave: '2' },
+    { name: 'ре', accidental: 'b', position: 2.5, octave: '2' },
+    { name: 'до', accidental: null, position: 3, octave: '2' },
+    { name: 'си', accidental: null, position: 4, octave: '1' },
+    { name: 'си', accidental: 'b', position: 4.5, octave: '1' },
     { name: 'ля', accidental: null, position: 5, octave: '1' },
     { name: 'ля', accidental: 'b', position: 5.5, octave: '1' },
-    { name: 'си', accidental: null, position: 6, octave: '1' },
-    { name: 'до', accidental: null, position: 7, octave: '2' },
-    { name: 'до', accidental: '#', position: 7.5, octave: '2' },
-    { name: 'ре', accidental: null, position: 8, octave: '2' },
-    { name: 'ре', accidental: '#', position: 8.5, octave: '2' },
-    { name: 'ми', accidental: null, position: 9, octave: '2', ledger: true },
-    { name: 'фа', accidental: null, position: 10, octave: '2', ledger: true },
-    { name: 'фа', accidental: '#', position: 10.5, octave: '2', ledger: true },
-    { name: 'соль', accidental: null, position: 11, octave: '2', ledger: true },
-    { name: 'соль', accidental: '#', position: 11.5, octave: '2', ledger: true },
-    { name: 'ля', accidental: null, position: 12, octave: '2', ledger: true },
-    { name: 'ля', accidental: 'b', position: 12.5, octave: '2', ledger: true },
-    { name: 'си', accidental: null, position: 13, octave: '2', ledger: true },
-    { name: 'до', accidental: null, position: 14, octave: '3', ledger: true },
+    { name: 'соль', accidental: null, position: 6, octave: '1' },
+    { name: 'фа', accidental: '#', position: 6.5, octave: '1' },
+    { name: 'фа', accidental: null, position: 7, octave: '1' },
+    { name: 'ми', accidental: null, position: 8, octave: '1' },
+    { name: 'ми', accidental: 'b', position: 8.5, octave: '1' },
+    { name: 'ре', accidental: null, position: 9, octave: '1' },
+    { name: 'ре', accidental: 'b', position: 9.5, octave: '1' },
+    { name: 'до', accidental: null, position: 10, octave: '1', ledger: true },
 ]
-
-const CHROMATIC_DOWN = [...CHROMATIC_UP].reverse()
-
-const NOTE_COLORS = {
-    'до': '#ef4444',
-    'ре': '#f97316',
-    'ми': '#eab308',
-    'фа': '#22c55e',
-    'соль': '#0ea5e9',
-    'ля': '#3b82f6',
-    'си': '#a855f7',
-}
-
-const NOTE_BG_COLORS = {
-    'до': '#fee2e2',
-    'ре': '#ffedd5',
-    'ми': '#fef9c3',
-    'фа': '#dcfce7',
-    'соль': '#e0f2fe',
-    'ля': '#dbeafe',
-    'си': '#f3e8ff',
-}
 
 export const useGameStore = defineStore('game', () => {
     const grid = ref([])
@@ -114,10 +152,11 @@ export const useGameStore = defineStore('game', () => {
     const isPlaying = ref(false)
     const isFinished = ref(false)
     const revealedNotes = ref(new Map())
+
     const difficulty = ref('beginner')
     const clef = ref('treble')
     const chromaticDirection = ref('up')
-    const version = ref('v2') // v1 или v2
+    const version = ref('v2') // 'v1' или 'v2'
 
     let timerInterval = null
 
@@ -157,15 +196,21 @@ export const useGameStore = defineStore('game', () => {
 
     function getNotesForLevel() {
         if (version.value === 'v1') {
-            return clef.value === 'treble' ? TREBLE_NOTES_V1 : BASS_NOTES_V1
+            if (difficulty.value === 'beginner') {
+                return clef.value === 'treble' ? TREBLE_NOTES_V1_BEGINNER : BASS_NOTES_V1_BEGINNER
+            }
+            return clef.value === 'treble' ? TREBLE_NOTES_V1_ADVANCED : BASS_NOTES_V1_ADVANCED
         }
 
-        // V2
+        // V2 логика
         if (difficulty.value === 'master') {
             return chromaticDirection.value === 'up' ? CHROMATIC_UP : CHROMATIC_DOWN
         }
         if (difficulty.value === 'hard') {
             return TREBLE_NOTES_V2_1_3
+        }
+        if (difficulty.value === 'beginner') {
+            return TREBLE_NOTES_V2_BEGINNER
         }
         return TREBLE_NOTES_V2_2_3
     }
@@ -188,7 +233,7 @@ export const useGameStore = defineStore('game', () => {
             sequence.value = [...notesSource]
         }
 
-        // Создаём сетку
+        // Создаём сетку (заполняем нужным количеством нот + случайные для заполнения)
         const gridNotes = [...notesSource]
         while (gridNotes.length < totalCells) {
             const randomNote = notesSource[Math.floor(Math.random() * notesSource.length)]
@@ -283,7 +328,6 @@ export const useGameStore = defineStore('game', () => {
 
     function setVersion(newVersion) {
         version.value = newVersion
-        // Сбрасываем настройки при смене версии
         if (newVersion === 'v1') {
             difficulty.value = 'beginner'
             clef.value = 'treble'
