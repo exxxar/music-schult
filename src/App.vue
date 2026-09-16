@@ -4,24 +4,35 @@
 
     <SettingsBar
         :difficulty="pendingDifficulty"
-        :instrument="pendingInstrument"
+        :clef="pendingClef"
+        :direction="pendingDirection"
         @select-difficulty="handleDifficultySelect"
-        @select-instrument="handleInstrumentSelect"
+        @select-clef="handleClefSelect"
+        @select-direction="handleDirectionSelect"
     />
 
     <GameHeader
         :time-elapsed="gameStore.timeElapsed"
         :score="gameStore.score"
         :errors="gameStore.errors"
+        :total="gameStore.sequence.length"
     />
 
-    <div class="target-note" v-if="gameStore.targetNote && gameStore.isPlaying">
+    <div class="target-note" v-if="gameStore.currentNoteName && gameStore.isPlaying">
       <div class="target-note-box">
-        Найди ноту: {{ gameStore.targetNote.name }}
+        Найди ноту: <strong>{{ gameStore.currentNoteName }}</strong>
       </div>
     </div>
 
-    <div class="game-grid">
+    <div v-if="gameStore.isFinished" class="finish-message">
+      <div class="finish-box">
+        <h2>🎉 Отлично!</h2>
+        <p>Время: {{ formatTime(gameStore.timeElapsed) }}</p>
+        <p>Ошибок: {{ gameStore.errors }}</p>
+      </div>
+    </div>
+
+    <div class="game-grid" :class="`grid-${gameStore.getGridSize()}`">
       <NoteCard
           v-for="note in gameStore.grid"
           :key="note.id"
@@ -30,22 +41,20 @@
       />
     </div>
 
-    <!-- Модальное окно подтверждения -->
-    <div v-if="showConfirmModal" class="modal-overlay" @click.self="cancelChange">
-      <div class="modal-content">
-        <h3 class="modal-title">Начать новую игру?</h3>
-        <p class="modal-text">
-          Изменение настроек сбросит текущий прогресс.
-        </p>
-        <div class="modal-buttons">
-          <button class="modal-btn cancel" @click="cancelChange">
-            Отмена
-          </button>
-          <button class="modal-btn confirm" @click="confirmChange">
-            Да, начать
-          </button>
-        </div>
-      </div>
+    <!-- Свитч V1/V2 -->
+    <div class="version-switch">
+      <button
+          :class="['version-btn', { active: gameStore.version === 'v1' }]"
+          @click="switchVersion('v1')"
+      >
+        V1
+      </button>
+      <button
+          :class="['version-btn', { active: gameStore.version === 'v2' }]"
+          @click="switchVersion('v2')"
+      >
+        V2
+      </button>
     </div>
   </div>
 
@@ -53,8 +62,20 @@
       @click="startNewGame"
       class="new-game-btn"
   >
-    Новая игра
+    {{ gameStore.isFinished ? 'Играть снова' : 'Новая игра' }}
   </button>
+
+  <!-- Модальное окно -->
+  <div v-if="showConfirmModal" class="modal-overlay" @click.self="cancelChange">
+    <div class="modal-content">
+      <h3 class="modal-title">Начать новую игру?</h3>
+      <p class="modal-text">Изменение настроек сбросит текущий прогресс.</p>
+      <div class="modal-buttons">
+        <button class="modal-btn cancel" @click="cancelChange">Отмена</button>
+        <button class="modal-btn confirm" @click="confirmChange">Да, начать</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -66,17 +87,15 @@ import NoteCard from './components/NoteCard.vue'
 
 const gameStore = useGameStore()
 
-// Текущие отображаемые значения (до подтверждения)
-const pendingDifficulty = ref('easy')
-const pendingInstrument = ref('piano')
+const pendingDifficulty = ref('beginner')
+const pendingClef = ref('treble')
+const pendingDirection = ref('up')
+const activeDifficulty = ref('beginner')
+const activeClef = ref('treble')
+const activeDirection = ref('up')
 
-// Применённые значения (после подтверждения)
-const activeDifficulty = ref('easy')
-const activeInstrument = ref('piano')
-
-// Состояние модального окна
 const showConfirmModal = ref(false)
-const pendingChange = ref(null) // { type: 'difficulty'|'instrument', value: string }
+const pendingChange = ref(null)
 
 function handleDifficultySelect(value) {
   if (value === activeDifficulty.value) return
@@ -85,19 +104,43 @@ function handleDifficultySelect(value) {
   showConfirmModal.value = true
 }
 
-function handleInstrumentSelect(value) {
-  if (value === activeInstrument.value) return
-  pendingInstrument.value = value
-  pendingChange.value = { type: 'instrument', value }
+function handleClefSelect(value) {
+  if (value === activeClef.value) return
+  pendingClef.value = value
+  pendingChange.value = { type: 'clef', value }
   showConfirmModal.value = true
+}
+
+function handleDirectionSelect(value) {
+  if (value === activeDirection.value) return
+  pendingDirection.value = value
+  pendingChange.value = { type: 'direction', value }
+  showConfirmModal.value = true
+}
+
+function switchVersion(newVersion) {
+  if (gameStore.version === newVersion) return
+
+  // Спрашиваем подтверждение если игра идёт
+  if (gameStore.isPlaying && gameStore.score > 0) {
+    pendingChange.value = { type: 'version', value: newVersion }
+    showConfirmModal.value = true
+  } else {
+    gameStore.setVersion(newVersion)
+    startNewGame()
+  }
 }
 
 function confirmChange() {
   if (pendingChange.value) {
     if (pendingChange.value.type === 'difficulty') {
       activeDifficulty.value = pendingChange.value.value
-    } else {
-      activeInstrument.value = pendingChange.value.value
+    } else if (pendingChange.value.type === 'clef') {
+      activeClef.value = pendingChange.value.value
+    } else if (pendingChange.value.type === 'direction') {
+      activeDirection.value = pendingChange.value.value
+    } else if (pendingChange.value.type === 'version') {
+      gameStore.setVersion(pendingChange.value.value)
     }
     startNewGame()
   }
@@ -106,19 +149,25 @@ function confirmChange() {
 }
 
 function cancelChange() {
-  // Откатываем к предыдущим значениям
   pendingDifficulty.value = activeDifficulty.value
-  pendingInstrument.value = activeInstrument.value
+  pendingClef.value = activeClef.value
+  pendingDirection.value = activeDirection.value
   showConfirmModal.value = false
   pendingChange.value = null
 }
 
 function startNewGame() {
-  gameStore.startGame(activeDifficulty.value)
+  gameStore.startGame(activeDifficulty.value, activeClef.value, activeDirection.value)
 }
 
 function handleNoteClick(note) {
   gameStore.checkNote(note)
+}
+
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
 }
 
 onMounted(() => {
@@ -131,7 +180,88 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* Модальное окно */
+.game-grid {
+  display: grid;
+  gap: 8px;
+  max-width: 400px;
+  margin: 0 auto 20px;
+}
+
+.grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+  max-width: 500px;
+}
+
+.grid-5 {
+  grid-template-columns: repeat(5, 1fr);
+  max-width: 600px;
+}
+
+/* Свитч версий */
+.version-switch {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 4px;
+  background: #f3f4f6;
+  border-radius: 16px;
+  max-width: 200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.version-btn {
+  flex: 1;
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.version-btn:hover {
+  color: #6b5b95;
+}
+
+.version-btn.active {
+  background: white;
+  color: #6b5b95;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.finish-message {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.finish-box {
+  display: inline-block;
+  background-color: #dcfce7;
+  border: 2px solid #22c55e;
+  border-radius: 16px;
+  padding: 16px 32px;
+  color: #166534;
+}
+
+.finish-box h2 {
+  margin-bottom: 8px;
+  font-size: 22px;
+}
+
+.finish-box p {
+  font-size: 15px;
+  margin: 4px 0;
+}
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -163,14 +293,8 @@ onUnmounted(() => {
 }
 
 @keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .modal-title {
@@ -221,9 +345,5 @@ onUnmounted(() => {
 
 .modal-btn.confirm:hover {
   background-color: #8b7ab8;
-}
-
-.modal-btn:active {
-  transform: scale(0.98);
 }
 </style>

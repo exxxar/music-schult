@@ -2,15 +2,22 @@
   <div
       class="note-card"
       :class="cardClasses"
+      :style="cardStyle"
       @click="handleClick"
   >
     <canvas
         ref="canvasRef"
-        :width="100"
-        :height="120"
+        :width="120"
+        :height="140"
         class="note-canvas"
     ></canvas>
-    <span v-if="showLabel" class="note-name" :class="labelClass">{{ note.name }}</span>
+    <Transition name="fade">
+      <span v-if="showLabel" class="note-label" :class="labelClass">
+        {{ note.name }}
+        <span v-if="note.octave === 'малая'" class="octave">м.</span>
+        <span v-else-if="note.octave === '2'" class="octave">²</span>
+      </span>
+    </Transition>
   </div>
 </template>
 
@@ -29,46 +36,65 @@ const emit = defineEmits(['click'])
 const gameStore = useGameStore()
 const canvasRef = ref(null)
 
-// Позиции нот на стане (относительно первой линии)
-const NOTE_POSITIONS = {
-  'до': -2,   // под станом (добавочная линия снизу)
-  'ре': 0,    // на первой линии
-  'ми': 1,    // в первом пространстве
-  'фа': 2,    // на второй линии
-  'соль': 3,  // во втором пространстве
-  'ля': 4,    // на третьей линии
-  'си': 5,    // в третьем пространстве
-  'до2': 7,   // на четвёртой линии
+const NOTE_COLORS = {
+  'до': '#ef4444',
+  'ре': '#f97316',
+  'ми': '#eab308',
+  'фа': '#22c55e',
+  'соль': '#0ea5e9',
+  'ля': '#3b82f6',
+  'си': '#a855f7',
 }
 
-function setCanvasRef(el, id) {
-  if (el) {
-    canvasRef.value = el
-    nextTick(() => drawNote())
-  }
+const NOTE_BG_COLORS = {
+  'до': '#fee2e2',
+  'ре': '#ffedd5',
+  'ми': '#fef9c3',
+  'фа': '#dcfce7',
+  'соль': '#e0f2fe',
+  'ля': '#dbeafe',
+  'си': '#f3e8ff',
 }
 
 const noteState = computed(() => {
-  return gameStore.revealedNotes.get(props.note.id) || { revealed: false, correct: false }
+  return gameStore.revealedNotes.get(props.note.id) || { correct: false, temp: false }
 })
 
-const showLabel = computed(() => noteState.value.revealed)
+const showLabel = computed(() => {
+  const diff = gameStore.difficulty
+
+  // beginner и easy: подписи видны сразу
+  if (diff === 'beginner' || diff === 'easy') return true
+
+  // medium: подписи только после правильного нажатия
+  if (diff === 'medium') return noteState.value.correct
+
+  return false
+})
 
 const cardClasses = computed(() => {
   const classes = []
 
   if (noteState.value.correct) {
     classes.push('correct')
-  } else if (noteState.value.revealed && !noteState.value.correct) {
+  } else if (noteState.value.temp) {
     classes.push('wrong')
   }
 
   return classes
 })
 
+const cardStyle = computed(() => {
+  // Цвет фона для beginner уровня или после правильного ответа
+  if (gameStore.difficulty === 'beginner' || noteState.value.correct) {
+    return { backgroundColor: NOTE_BG_COLORS[props.note.name] || 'white' }
+  }
+  return {}
+})
+
 const labelClass = computed(() => {
   if (noteState.value.correct) return 'label-correct'
-  if (noteState.value.revealed) return 'label-wrong'
+  if (noteState.value.temp) return 'label-wrong'
   return ''
 })
 
@@ -79,8 +105,9 @@ function drawNote() {
   const ctx = canvas.getContext('2d')
   ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-  const startX = 10
-  const startY = 40
+  const isTreble = gameStore.clef === 'treble'
+  const startX = 20
+  const startY = 45
   const lineSpacing = 10
   const lineWidth = 80
 
@@ -96,37 +123,48 @@ function drawNote() {
     ctx.stroke()
   }
 
-  // Рисуем скрипичный ключ (упрощённо)
-  ctx.font = 'bold 24px serif'
+  // Рисуем ключ
+  ctx.font = 'bold 28px serif'
   ctx.fillStyle = '#374151'
-  ctx.fillText('𝄞', startX - 5, startY + 25)
+  if (isTreble) {
+    ctx.fillText('', startX - 8, startY + 28)
+  } else {
+    ctx.fillText('', startX - 8, startY + 30)
+  }
 
-  // Получаем позицию ноты
-  const position = NOTE_POSITIONS[props.note.name] ?? 0
+  // Позиция ноты
+  const position = props.note.position ?? 0
 
-  // Вычисляем Y позицию ноты
   const noteY = startY + (position * lineSpacing / 2)
-  const noteX = startX + lineWidth / 2 + 10
+  const noteX = startX + lineWidth / 2 + 15
 
-  // Рисуем добавочные линии если нужно
-  if (position < 0 || position > 4) {
+  // Рисуем добавочную линию если нужно
+  if (props.note.ledger) {
     ctx.beginPath()
-    ctx.moveTo(noteX - 8, noteY)
-    ctx.lineTo(noteX + 8, noteY)
+    ctx.moveTo(noteX - 10, noteY)
+    ctx.lineTo(noteX + 10, noteY)
     ctx.stroke()
   }
 
   // Рисуем ноту (овал)
   ctx.fillStyle = '#1f2937'
   ctx.beginPath()
-  ctx.ellipse(noteX, noteY, 6, 4, Math.PI / 6, 0, Math.PI * 2)
+  ctx.ellipse(noteX, noteY, 7, 5, Math.PI / 6, 0, Math.PI * 2)
   ctx.fill()
 
-// Рисуем штиль (палочку вверх)
-  ctx.beginPath()
-  ctx.moveTo(noteX + 4, noteY + 2)  // начинаем чуть ниже центра
-  ctx.lineTo(noteX + 4, noteY - 30)
-  ctx.stroke()
+  // Рисуем штиль
+  const stemDirection = position < 3 ? 1 : -1
+  if (stemDirection === 1) {
+    ctx.beginPath()
+    ctx.moveTo(noteX + 5, noteY)
+    ctx.lineTo(noteX + 5, noteY - 35)
+    ctx.stroke()
+  } else {
+    ctx.beginPath()
+    ctx.moveTo(noteX - 5, noteY)
+    ctx.lineTo(noteX - 5, noteY + 35)
+    ctx.stroke()
+  }
 }
 
 function handleClick() {
@@ -139,7 +177,7 @@ onMounted(() => {
   setTimeout(() => drawNote(), 100)
 })
 
-watch(() => props.note, () => {
+watch(() => [props.note, gameStore.difficulty, gameStore.clef], () => {
   nextTick(() => drawNote())
 }, { deep: true })
 </script>
@@ -174,12 +212,11 @@ watch(() => props.note, () => {
 
 .note-card.correct {
   border-color: #22c55e;
-  background-color: #dcfce7;
 }
 
 .note-card.wrong {
   border-color: #ef4444;
-  background-color: #fee2e2;
+  background-color: #fee2e2 !important;
   animation: shake 0.5s;
 }
 
@@ -190,31 +227,64 @@ watch(() => props.note, () => {
 }
 
 .note-canvas {
-  width: 100px;
-  height: 120px;
+  width: 120px;
+  height: 140px;
   display: block;
 }
 
-.note-name {
-  margin-top: 6px;
-  font-size: 13px;
+/* Красивая подпись ноты */
+.note-label {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.95);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
   font-style: italic;
-  font-weight: 600;
-  text-align: center;
-  opacity: 0;
-  animation: fadeIn 0.3s forwards;
+  color: #374151;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
-@keyframes fadeIn {
-  to { opacity: 1; }
+.note-label .octave {
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 2px;
+  opacity: 0.7;
+  font-style: normal;
 }
 
 .label-correct {
-  color: #22c55e;
+  background: rgba(34, 197, 94, 0.15);
+  color: #166534;
+  border-color: rgba(34, 197, 94, 0.3);
 }
 
 .label-wrong {
-  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+  color: #991b1b;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* Анимация появления */
+.fade-enter-active,
+.fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.fade-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px);
+}
+
+.fade-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-10px);
 }
 
 @media screen and (max-width: 480px) {
@@ -225,12 +295,20 @@ watch(() => props.note, () => {
   }
 
   .note-canvas {
-    width: 80px;
-    height: 100px;
+    width: 100px;
+    height: 120px;
   }
 
-  .note-name {
-    font-size: 11px;
+  .note-label {
+    font-size: 12px;
+    padding: 3px 10px;
+    bottom: -4px;
+    z-index: 10;
+    left: 27px;
+  }
+
+  .note-label .octave {
+    font-size: 10px;
   }
 }
 </style>
