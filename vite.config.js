@@ -4,19 +4,31 @@ import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  base: './',
+  build: {
+    outDir: 'dist',
+    rollupOptions: {
+      output: {
+        // Добавляем хэш к именам файлов для кэш-бастинга
+        entryFileNames: 'assets/[name].[hash].js',
+        chunkFileNames: 'assets/[name].[hash].js',
+        assetFileNames: 'assets/[name].[hash].[ext]'
+      }
+    }
+  },
   plugins: [
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      includeAssets: ['favicon.ico'],
       manifest: {
         name: 'Таблицы Шульте: Ноты',
         short_name: 'Ноты Шульте',
         description: 'Тренажер для музыкантов',
-        theme_color: '#f3f0eb', // Цвет фона как на скринах
-        background_color: '#f3f0eb',
+        theme_color: '#faf8f5',
+        background_color: '#faf8f5',
         display: 'standalone',
-        orientation: 'portrait',
+        start_url: './',
         icons: [
           {
             src: 'pwa-192x192.png',
@@ -31,7 +43,21 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        // Стратегия кэширования: Network First для HTML, Cache First для ассетов
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 год
+              }
+            }
+          }
+        ]
       }
     })
   ],

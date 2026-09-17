@@ -6,9 +6,11 @@
         :difficulty="pendingDifficulty"
         :clef="pendingClef"
         :direction="pendingDirection"
+        :duration="pendingDuration"
         @select-difficulty="handleDifficultySelect"
         @select-clef="handleClefSelect"
         @select-direction="handleDirectionSelect"
+        @select-duration="handleDurationSelect"
     />
 
     <GameHeader
@@ -26,7 +28,7 @@
 
     <div v-if="gameStore.isFinished" class="finish-message">
       <div class="finish-box">
-        <h2>🎉 Отлично!</h2>
+        <h2> Отлично!</h2>
         <p>Время: {{ formatTime(gameStore.timeElapsed) }}</p>
         <p>Ошибок: {{ gameStore.errors }}</p>
       </div>
@@ -56,6 +58,11 @@
         V2
       </button>
     </div>
+
+    <!-- Версия приложения -->
+    <div class="app-version">
+      v{{ appVersion }} ({{ buildDate }})
+    </div>
   </div>
 
   <button
@@ -84,15 +91,20 @@ import { useGameStore } from './stores/game'
 import GameHeader from './components/GameHeader.vue'
 import SettingsBar from './components/SettingsBar.vue'
 import NoteCard from './components/NoteCard.vue'
+import { APP_VERSION, BUILD_DATE } from './version'
 
 const gameStore = useGameStore()
+const appVersion = APP_VERSION
+const buildDate = BUILD_DATE
 
 const pendingDifficulty = ref('beginner')
 const pendingClef = ref('treble')
 const pendingDirection = ref('up')
+const pendingDuration = ref('quarter')
 const activeDifficulty = ref('beginner')
 const activeClef = ref('treble')
 const activeDirection = ref('up')
+const activeDuration = ref('quarter')
 
 const showConfirmModal = ref(false)
 const pendingChange = ref(null)
@@ -118,10 +130,16 @@ function handleDirectionSelect(value) {
   showConfirmModal.value = true
 }
 
+function handleDurationSelect(value) {
+  if (value === activeDuration.value) return
+  pendingDuration.value = value
+  pendingChange.value = { type: 'duration', value }
+  showConfirmModal.value = true
+}
+
 function switchVersion(newVersion) {
   if (gameStore.version === newVersion) return
 
-  // Спрашиваем подтверждение если игра идёт
   if (gameStore.isPlaying && gameStore.score > 0) {
     pendingChange.value = { type: 'version', value: newVersion }
     showConfirmModal.value = true
@@ -139,6 +157,8 @@ function confirmChange() {
       activeClef.value = pendingChange.value.value
     } else if (pendingChange.value.type === 'direction') {
       activeDirection.value = pendingChange.value.value
+    } else if (pendingChange.value.type === 'duration') {
+      activeDuration.value = pendingChange.value.value
     } else if (pendingChange.value.type === 'version') {
       gameStore.setVersion(pendingChange.value.value)
     }
@@ -152,12 +172,18 @@ function cancelChange() {
   pendingDifficulty.value = activeDifficulty.value
   pendingClef.value = activeClef.value
   pendingDirection.value = activeDirection.value
+  pendingDuration.value = activeDuration.value
   showConfirmModal.value = false
   pendingChange.value = null
 }
 
 function startNewGame() {
-  gameStore.startGame(activeDifficulty.value, activeClef.value, activeDirection.value)
+  gameStore.startGame(
+      activeDifficulty.value,
+      activeClef.value,
+      activeDirection.value,
+      activeDuration.value
+  )
 }
 
 function handleNoteClick(note) {
@@ -201,7 +227,6 @@ onUnmounted(() => {
   max-width: 600px;
 }
 
-/* Свитч версий */
 .version-switch {
   display: flex;
   justify-content: center;
@@ -236,6 +261,14 @@ onUnmounted(() => {
   background: white;
   color: #6b5b95;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.app-version {
+  text-align: center;
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 12px;
+  margin-bottom: 20px;
 }
 
 .finish-message {
