@@ -59,6 +59,7 @@
       </button>
     </div>
 
+
     <!-- Версия приложения -->
     <div class="app-version">
       v{{ appVersion }} ({{ buildDate }})
@@ -209,7 +210,7 @@ onUnmounted(() => {
 .game-grid {
   display: grid;
   gap: 8px;
-  max-width: 400px;
+  max-width: 350px;
   margin: 0 auto 20px;
 }
 
@@ -218,13 +219,13 @@ onUnmounted(() => {
 }
 
 .grid-4 {
-  grid-template-columns: repeat(4, 1fr);
-  max-width: 500px;
+  grid-template-columns: repeat(3, 1fr);
+
 }
 
 .grid-5 {
-  grid-template-columns: repeat(5, 1fr);
-  max-width: 600px;
+  grid-template-columns: repeat(3, 1fr);
+
 }
 
 .version-switch {
@@ -379,4 +380,12 @@ onUnmounted(() => {
 .modal-btn.confirm:hover {
   background-color: #8b7ab8;
 }
+
+.game-grid {
+  margin: 20px 0px;
+  padding: 0;
+
+}
+
+
 </style>

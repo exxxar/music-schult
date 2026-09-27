@@ -1,5 +1,5 @@
 // public/sw.js
-const CACHE_NAME = 'music-schulte-v1.0.0'
+const CACHE_NAME = 'music-schulte-v1.0.8'
 const urlsToCache = [
     '/',
     '/index.html',

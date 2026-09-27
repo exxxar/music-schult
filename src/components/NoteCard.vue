@@ -5,25 +5,23 @@
       :style="cardStyle"
       @click="handleClick"
   >
-    <!-- Центральный квадрат с ключом -->
     <div v-if="note.isClef" class="clef-display">
       <span class="clef-symbol">{{ note.clef === 'treble' ? '𝄞' : '𝄢' }}</span>
       <span class="clef-label">{{ note.clef === 'treble' ? 'Скрипичный' : 'Басовый' }}</span>
     </div>
 
-    <!-- Обычный квадрат с нотой -->
     <template v-else>
       <canvas
           ref="canvasRef"
           :width="120"
-          :height="140"
+          :height="160"
           class="note-canvas"
       ></canvas>
       <Transition name="fade">
         <span v-if="showLabel" class="note-label" :class="labelClass">
           {{ note.name }}
           <span v-if="note.accidental === '#'" class="accidental">♯</span>
-          <span v-else-if="note.accidental === 'b'" class="accidental"></span>
+          <span v-else-if="note.accidental === 'b'" class="accidental">♭</span>
           <span v-if="note.octave" class="octave">{{ note.octave }}</span>
         </span>
       </Transition>
@@ -34,6 +32,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useGameStore } from '../stores/game'
+import { playNoteSound } from '../utils/audio'
 
 const props = defineProps({
   note: {
@@ -104,17 +103,29 @@ const labelClass = computed(() => {
 })
 
 /**
- * Отрисовка ноты на canvas.
- *
- * Правила отрисовки по длительности:
- * - whole (целая): открытый овал, БЕЗ штиля
- * - half (половинная): открытый овал, СО штилем
- * - quarter (четвертная): закрашенный овал, СО штилем
- *
- * Направление штиля (стандартное правило):
- * - position >= 4 (на 3-й линии и ниже) → штиль ВВЕРХ
- * - position < 4 (выше 3-й линии) → штиль ВНИЗ
+ * Вычисляет позиции всех добавочных линий для ноты
+ * Возвращает массив Y-координат добавочных линий
  */
+function getLedgerLines(position) {
+  const lines = []
+
+  if (position < 0) {
+    // Нота выше стана (position < 0 = выше верхней линии)
+    // Добавочные линии на position 0, -2, -4, ... (чётные отрицательные)
+    for (let p = 0; p >= position; p -= 2) {
+      if (p !== 0) lines.push(p)
+    }
+  } else if (position > 8) {
+    // Нота ниже стана (position > 8 = ниже нижней линии)
+    // Добавочные линии на position 8, 10, 12, ... (чётные положительные)
+    for (let p = 8; p <= position; p += 2) {
+      if (p !== 8) lines.push(p)
+    }
+  }
+
+  return lines
+}
+
 function drawNote() {
   const canvas = canvasRef.value
   if (!canvas || props.note.isClef) return
@@ -122,11 +133,11 @@ function drawNote() {
   const ctx = canvas.getContext('2d')
   ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-  // Параметры стана
-  const startX = 25
-  const startY = 50
+  // Параметры стана (увеличенный canvas)
+  const startX = 30
+  const startY = 60  // Верхняя (5-я) линия стана
   const lineSpacing = 8
-  const lineWidth = 70
+  const lineWidth = 80
 
   // 1. Рисуем 5 линий стана
   ctx.strokeStyle = '#374151'
@@ -139,61 +150,60 @@ function drawNote() {
     ctx.stroke()
   }
 
-  // 2. Рисуем ключ (маленький)
-  ctx.font = '24px serif'
+  // 2. Рисуем ключ (маленький, слева от ноты)
+  ctx.font = '28px serif'
   ctx.fillStyle = '#374151'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   const clefSymbol = gameStore.clef === 'treble' ? '𝄞' : '𝄢'
-  ctx.fillText(clefSymbol, startX - 5, startY + 16)
+  ctx.fillText(clefSymbol, startX - 10, startY + 16)
 
   // 3. Позиция ноты
   const position = props.note.position ?? 0
   const noteY = startY + (position * lineSpacing / 2)
   const noteX = startX + lineWidth / 2 + 10
 
-  // 4. Добавочная линия (только если нота стоит на ней)
-  if (props.note.ledger) {
-    ctx.strokeStyle = '#374151'
-    ctx.lineWidth = 1
+  // 4. Рисуем все добавочные линии
+  const ledgerLines = getLedgerLines(position)
+  ctx.strokeStyle = '#374151'
+  ctx.lineWidth = 1
+  ledgerLines.forEach(ledgerPos => {
+    const ledgerY = startY + (ledgerPos * lineSpacing / 2)
     ctx.beginPath()
-    ctx.moveTo(noteX - 10, noteY)
-    ctx.lineTo(noteX + 10, noteY)
+    ctx.moveTo(noteX - 12, ledgerY)
+    ctx.lineTo(noteX + 12, ledgerY)
     ctx.stroke()
-  }
+  })
 
   // 5. Знак альтерации
   if (props.note.accidental) {
-    ctx.font = 'bold 18px serif'
+    ctx.font = 'bold 20px serif'
     ctx.fillStyle = '#1f2937'
     ctx.textAlign = 'right'
     ctx.textBaseline = 'middle'
     const accidentalSymbol = props.note.accidental === '#' ? '♯' : '♭'
-    ctx.fillText(accidentalSymbol, noteX - 10, noteY + 2)
+    ctx.fillText(accidentalSymbol, noteX - 12, noteY + 2)
   }
 
-  // 6. Определяем длительность
+  // 6. Длительность ноты
   const duration = props.note.duration || 'quarter'
   const isWhole = duration === 'whole'
-  const isHalf = duration === 'half'
-  const isFilled = duration === 'quarter' // только четвертная закрашена
+  const isFilled = duration === 'quarter'
 
-  // 7. Рисуем головку ноты
+  // 7. Головка ноты
   ctx.beginPath()
-  ctx.ellipse(noteX, noteY, 6, 4.5, Math.PI / 6, 0, Math.PI * 2)
+  ctx.ellipse(noteX, noteY, 7, 5, Math.PI / 6, 0, Math.PI * 2)
 
   if (isFilled) {
-    // Четвертная: закрашенная
     ctx.fillStyle = '#1f2937'
     ctx.fill()
   } else {
-    // Целая или половинная: открытая (только обводка)
     ctx.strokeStyle = '#1f2937'
     ctx.lineWidth = 1.5
     ctx.stroke()
   }
 
-  // 8. Рисуем штиль (НЕТ у целой ноты)
+  // 8. Штиль (нет у целой ноты)
   if (!isWhole) {
     const stemUp = position >= 4
     ctx.strokeStyle = '#1f2937'
@@ -201,11 +211,11 @@ function drawNote() {
     ctx.beginPath()
 
     if (stemUp) {
-      ctx.moveTo(noteX + 5, noteY)
-      ctx.lineTo(noteX + 5, noteY - 30)
+      ctx.moveTo(noteX + 6, noteY)
+      ctx.lineTo(noteX + 6, noteY - 35)
     } else {
-      ctx.moveTo(noteX - 5, noteY)
-      ctx.lineTo(noteX - 5, noteY + 30)
+      ctx.moveTo(noteX - 6, noteY)
+      ctx.lineTo(noteX - 6, noteY + 35)
     }
     ctx.stroke()
   }
@@ -213,6 +223,9 @@ function drawNote() {
 
 function handleClick() {
   if (props.note.isClef) return
+
+  playNoteSound(props.note)
+
   if (!noteState.value.correct) {
     emit('click', props.note)
   }
@@ -243,7 +256,7 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef, gameStore.version
   aspect-ratio: 1;
   background-color: white;
   position: relative;
-  min-height: 120px;
+  min-height: 130px;
 }
 
 .note-card:hover:not(.correct):not(.wrong):not(.clef-card) {
@@ -300,7 +313,7 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef, gameStore.version
 
 .note-canvas {
   width: 120px;
-  height: 140px;
+  height: 160px;
   display: block;
 }
 
@@ -369,12 +382,12 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef, gameStore.version
   .note-card {
     padding: 6px;
     border-radius: 12px;
-    min-height: 100px;
+    min-height: 110px;
   }
 
   .note-canvas {
-    width: 100px;
-    height: 120px;
+    width: 120px;
+    height: 140px;
   }
 
   .note-label {
