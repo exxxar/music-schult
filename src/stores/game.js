@@ -195,52 +195,52 @@ export const useGameStore = defineStore('game', () => {
         noteDuration.value = duration
 
         const notesSource = getNotesForLevel()
+        const gridSize = getGridSize()
+        const totalCells = gridSize * gridSize
 
-        if (version.value === 'v1') {
-            sequence.value = [...notesSource]
-            const shuffled = shuffleArray(notesSource)
+        // Нам нужно (totalCells - 1) уникальных нот, чтобы 1 ячейка осталась для ключа
+        const notesNeeded = totalCells - 1
 
-            grid.value = []
-            let noteIndex = 0
-            for (let i = 0; i < 9; i++) {
-                if (i === 4) {
-                    grid.value.push({
-                        id: i,
-                        isClef: true,
-                        clef: clefType
-                    })
-                } else {
-                    grid.value.push({
-                        id: i,
-                        ...shuffled[noteIndex],
-                        isClef: false,
-                        duration: duration
-                    })
-                    noteIndex++
-                }
-            }
+        // Берем нужное количество уникальных нот из источника (гарантирует отсутствие дублей)
+        const selectedNotes = notesSource.slice(0, notesNeeded)
+
+        // Формируем последовательность для поиска
+        if (version.value === 'v2' && diff === 'hard') {
+            sequence.value = shuffleArray(selectedNotes)
         } else {
-            const gridSize = getGridSize()
-            const totalCells = gridSize * gridSize
+            sequence.value = [...selectedNotes]
+        }
 
-            if (diff === 'hard') {
-                sequence.value = shuffleArray(notesSource)
+        // Перемешиваем ноты для расстановки по полю
+        const shuffledNotes = shuffleArray(selectedNotes)
+
+        grid.value = []
+        let noteIndex = 0
+
+        // Вычисляем индекс для ключа (строго по центру)
+        let clefIndex = -1
+        if (gridSize === 3) clefIndex = 4       // Центр для 3x3
+        else if (gridSize === 5) clefIndex = 12 // Центр для 5x5
+        else if (gridSize === 4) clefIndex = 5  // Для 4x4 ставим ключ во 2-ю строку, 2-ю колонку
+
+        for (let i = 0; i < totalCells; i++) {
+            if (i === clefIndex) {
+                // Ячейка с ключом
+                grid.value.push({
+                    id: i,
+                    isClef: true,
+                    clef: clefType
+                })
             } else {
-                sequence.value = [...notesSource]
+                // Ячейка с уникальной нотой
+                grid.value.push({
+                    id: i,
+                    ...shuffledNotes[noteIndex],
+                    isClef: false,
+                    duration: duration
+                })
+                noteIndex++
             }
-
-            const gridNotes = [...notesSource]
-            while (gridNotes.length < totalCells) {
-                const randomNote = notesSource[Math.floor(Math.random() * notesSource.length)]
-                gridNotes.push({ ...randomNote })
-            }
-
-            grid.value = shuffleArray(gridNotes).map((note, i) => ({
-                id: i,
-                ...note,
-                isClef: false,
-                duration: duration
-            }))
         }
 
         revealedNotes.value = new Map()

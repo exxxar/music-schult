@@ -11,12 +11,24 @@
     </div>
 
     <template v-else>
+      <!-- Показываем картинку, если она есть -->
+      <img
+          v-if="noteImageLoaded"
+          :src="noteImagePath"
+          :alt="note.name"
+          class="note-image"
+          @error="noteImageLoaded = false"
+      />
+
+      <!-- Иначе рендерим на canvas -->
       <canvas
+          v-else
           ref="canvasRef"
-          :width="120"
-          :height="160"
+          width="100"
+          height="100"
           class="note-canvas"
       ></canvas>
+
       <Transition name="fade">
         <span v-if="showLabel" class="note-label" :class="labelClass">
           {{ note.name }}
@@ -44,6 +56,10 @@ const props = defineProps({
 const emit = defineEmits(['click'])
 const gameStore = useGameStore()
 const canvasRef = ref(null)
+
+// Для загрузки изображения
+const noteImageLoaded = ref(false)
+const noteImagePath = ref('')
 
 const NOTE_BG_COLORS = {
   'до': '#fee2e2',
@@ -102,27 +118,56 @@ const labelClass = computed(() => {
   return ''
 })
 
-/**
- * Вычисляет позиции всех добавочных линий для ноты
- * Возвращает массив Y-координат добавочных линий
- */
+
+// Функция для получения пути к изображению ноты
+function getNoteImagePath(note) {
+  const noteMap = { 'до': 'c', 'ре': 'd', 'ми': 'e', 'фа': 'f', 'соль': 'g', 'ля': 'a', 'си': 'b' }
+  const octaveMap = { 'большая': '2', 'малая': '3', '1': '4', '2': '5', '3': '6' }
+
+  let name = noteMap[note.name] || 'c'
+  if (note.accidental === '#') name += '#'
+  if (note.accidental === 'b') name += 'b'
+
+  const octave = octaveMap[note.octave] || '4'
+  const duration = note.duration || 'quarter'
+
+  // Определяем ключ (treble или bass)
+  const clef = gameStore.clef || 'treble'
+
+  // Путь: /images/notes/[ключ]/[нота][октава]_[длительность].png
+  return `/images/notes/${clef}/${name}${octave}_${duration}.png`
+}
+
+// Проверяем наличие изображения
+function checkNoteImage() {
+  if (props.note.isClef) return
+
+  const imagePath = getNoteImagePath(props.note)
+  noteImagePath.value = imagePath
+
+  const img = new Image()
+  img.onload = () => {
+    noteImageLoaded.value = true
+  }
+  img.onerror = () => {
+    noteImageLoaded.value = false
+    // Если картинки нет, рендерим на canvas
+    nextTick(() => drawNote())
+  }
+  img.src = imagePath
+}
+
 function getLedgerLines(position) {
   const lines = []
-
   if (position < 0) {
-    // Нота выше стана (position < 0 = выше верхней линии)
-    // Добавочные линии на position 0, -2, -4, ... (чётные отрицательные)
-    for (let p = 0; p >= position; p -= 2) {
-      if (p !== 0) lines.push(p)
+    for (let p = -2; p >= position; p -= 2) {
+      lines.push(p)
     }
   } else if (position > 8) {
-    // Нота ниже стана (position > 8 = ниже нижней линии)
-    // Добавочные линии на position 8, 10, 12, ... (чётные положительные)
-    for (let p = 8; p <= position; p += 2) {
-      if (p !== 8) lines.push(p)
+    for (let p = 10; p <= position; p += 2) {
+      lines.push(p)
     }
   }
-
   return lines
 }
 
@@ -133,11 +178,10 @@ function drawNote() {
   const ctx = canvas.getContext('2d')
   ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-  // Параметры стана (увеличенный canvas)
-  const startX = 30
-  const startY = 60  // Верхняя (5-я) линия стана
-  const lineSpacing = 8
-  const lineWidth = 80
+  const startX = 20
+  const startY = 35
+  const lineSpacing = 6
+  const lineWidth = 60
 
   // 1. Рисуем 5 линий стана
   ctx.strokeStyle = '#374151'
@@ -150,39 +194,39 @@ function drawNote() {
     ctx.stroke()
   }
 
-  // 2. Рисуем ключ (маленький, слева от ноты)
-  ctx.font = '28px serif'
+  // 2. Рисуем ключ
+  ctx.font = '20px serif'
   ctx.fillStyle = '#374151'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   const clefSymbol = gameStore.clef === 'treble' ? '𝄞' : '𝄢'
-  ctx.fillText(clefSymbol, startX - 10, startY + 16)
+  ctx.fillText(clefSymbol, startX - 6, startY + 12)
 
   // 3. Позиция ноты
   const position = props.note.position ?? 0
   const noteY = startY + (position * lineSpacing / 2)
-  const noteX = startX + lineWidth / 2 + 10
+  const noteX = startX + lineWidth / 2 + 8
 
-  // 4. Рисуем все добавочные линии
+  // 4. Рисуем добавочные линии
   const ledgerLines = getLedgerLines(position)
   ctx.strokeStyle = '#374151'
   ctx.lineWidth = 1
   ledgerLines.forEach(ledgerPos => {
     const ledgerY = startY + (ledgerPos * lineSpacing / 2)
     ctx.beginPath()
-    ctx.moveTo(noteX - 12, ledgerY)
-    ctx.lineTo(noteX + 12, ledgerY)
+    ctx.moveTo(noteX - 8, ledgerY)
+    ctx.lineTo(noteX + 8, ledgerY)
     ctx.stroke()
   })
 
   // 5. Знак альтерации
   if (props.note.accidental) {
-    ctx.font = 'bold 20px serif'
+    ctx.font = 'bold 14px serif'
     ctx.fillStyle = '#1f2937'
     ctx.textAlign = 'right'
     ctx.textBaseline = 'middle'
     const accidentalSymbol = props.note.accidental === '#' ? '♯' : '♭'
-    ctx.fillText(accidentalSymbol, noteX - 12, noteY + 2)
+    ctx.fillText(accidentalSymbol, noteX - 8, noteY + 1)
   }
 
   // 6. Длительность ноты
@@ -192,7 +236,7 @@ function drawNote() {
 
   // 7. Головка ноты
   ctx.beginPath()
-  ctx.ellipse(noteX, noteY, 7, 5, Math.PI / 6, 0, Math.PI * 2)
+  ctx.ellipse(noteX, noteY, 5, 3.5, Math.PI / 6, 0, Math.PI * 2)
 
   if (isFilled) {
     ctx.fillStyle = '#1f2937'
@@ -211,11 +255,11 @@ function drawNote() {
     ctx.beginPath()
 
     if (stemUp) {
-      ctx.moveTo(noteX + 6, noteY)
-      ctx.lineTo(noteX + 6, noteY - 35)
+      ctx.moveTo(noteX + 4, noteY)
+      ctx.lineTo(noteX + 4, noteY - 24)
     } else {
-      ctx.moveTo(noteX - 6, noteY)
-      ctx.lineTo(noteX - 6, noteY + 35)
+      ctx.moveTo(noteX - 4, noteY)
+      ctx.lineTo(noteX - 4, noteY + 24)
     }
     ctx.stroke()
   }
@@ -224,6 +268,7 @@ function drawNote() {
 function handleClick() {
   if (props.note.isClef) return
 
+  // Проигрываем звук
   playNoteSound(props.note)
 
   if (!noteState.value.correct) {
@@ -232,11 +277,13 @@ function handleClick() {
 }
 
 onMounted(() => {
-  setTimeout(() => drawNote(), 100)
+  // Сначала проверяем наличие картинки
+  checkNoteImage()
 })
 
 watch(() => [props.note, gameStore.difficulty, gameStore.clef, gameStore.version], () => {
-  nextTick(() => drawNote())
+  noteImageLoaded.value = false
+  nextTick(() => checkNoteImage())
 }, { deep: true })
 </script>
 
@@ -246,26 +293,27 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef, gameStore.version
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 8px;
-  border-radius: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 4px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
   cursor: pointer;
   user-select: none;
-  transition: all 0.3s;
-  border: 3px solid transparent;
+  transition: all 0.2s;
+  border: 2px solid transparent;
   aspect-ratio: 1;
   background-color: white;
   position: relative;
-  min-height: 130px;
+  width: 100%;
+  max-width: 110px;
 }
 
 .note-card:hover:not(.correct):not(.wrong):not(.clef-card) {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
 }
 
 .note-card:active:not(.correct):not(.wrong):not(.clef-card) {
-  transform: scale(0.98);
+  transform: scale(0.96);
 }
 
 .note-card.correct {
@@ -275,7 +323,7 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef, gameStore.version
 .note-card.wrong {
   border-color: #ef4444;
   background-color: #fee2e2 !important;
-  animation: shake 0.5s;
+  animation: shake 0.4s;
 }
 
 .note-card.clef-card {
@@ -289,17 +337,17 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef, gameStore.version
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .clef-symbol {
-  font-size: 64px;
+  font-size: 48px;
   color: #6b5b95;
   line-height: 1;
 }
 
 .clef-label {
-  font-size: 12px;
+  font-size: 10px;
   color: #6b5b95;
   font-weight: 600;
   text-align: center;
@@ -307,45 +355,52 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef, gameStore.version
 
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-5px); }
-  75% { transform: translateX(5px); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.note-image {
+  width: 100px;
+  height: 100px;
+  display: block;
+  object-fit: contain;
 }
 
 .note-canvas {
-  width: 120px;
-  height: 160px;
+  width: 100px;
+  height: 100px;
   display: block;
 }
 
 .note-label {
   position: absolute;
-  bottom: 8px;
+  bottom: 4px;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.95);
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 14px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 11px;
   font-weight: 700;
   font-style: italic;
   color: #374151;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   white-space: nowrap;
   backdrop-filter: blur(4px);
   border: 1px solid rgba(255, 255, 255, 0.5);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .note-label .accidental {
-  font-size: 16px;
+  font-size: 12px;
   font-weight: bold;
   font-style: normal;
 }
 
 .note-label .octave {
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 600;
   opacity: 0.7;
   font-style: normal;
@@ -365,51 +420,52 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef, gameStore.version
 
 .fade-enter-active,
 .fade-leave-active {
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .fade-enter-from {
   opacity: 0;
-  transform: translateX(-50%) translateY(10px);
+  transform: translateX(-50%) translateY(6px);
 }
 
 .fade-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(-10px);
+  transform: translateX(-50%) translateY(-6px);
 }
 
 @media screen and (max-width: 480px) {
   .note-card {
-    padding: 6px;
-    border-radius: 12px;
-    min-height: 110px;
+    padding: 2px;
+    border-radius: 8px;
+    max-width: 90px;
   }
 
+  .note-image,
   .note-canvas {
-    width: 120px;
-    height: 140px;
+    width: 80px;
+    height: 80px;
   }
 
   .note-label {
-    font-size: 12px;
-    padding: 3px 10px;
-    bottom: 6px;
+    font-size: 9px;
+    padding: 2px 6px;
+    bottom: 2px;
   }
 
   .note-label .accidental {
-    font-size: 14px;
+    font-size: 10px;
   }
 
   .note-label .octave {
-    font-size: 10px;
+    font-size: 8px;
   }
 
   .clef-symbol {
-    font-size: 48px;
+    font-size: 36px;
   }
 
   .clef-label {
-    font-size: 10px;
+    font-size: 8px;
   }
 }
 </style>

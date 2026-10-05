@@ -210,22 +210,26 @@ onUnmounted(() => {
 .game-grid {
   display: grid;
   gap: 8px;
-  max-width: 350px;
-  margin: 0 auto 20px;
+  margin: 20px auto;
+  justify-content: center;
+  justify-items: center;
+  width: 100%;
+  max-width: 100%;
 }
 
 .grid-3 {
   grid-template-columns: repeat(3, 1fr);
+  max-width: 360px;
 }
 
 .grid-4 {
-  grid-template-columns: repeat(3, 1fr);
-
+  grid-template-columns: repeat(4, 1fr);
+  max-width: 480px;
 }
 
 .grid-5 {
-  grid-template-columns: repeat(3, 1fr);
-
+  grid-template-columns: repeat(5, 1fr);
+  max-width: 600px;
 }
 
 .version-switch {
