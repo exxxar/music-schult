@@ -300,11 +300,11 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef, gameStore.version
   user-select: none;
   transition: all 0.2s;
   border: 2px solid transparent;
-  aspect-ratio: 1;
+  aspect-ratio: 1; /* Гарантирует идеальный квадрат */
   background-color: white;
   position: relative;
-  width: 100%;
-  max-width: 110px;
+  width: 100%;  /* Занимает всю ширину ячейки сетки */
+  height: 100%; /* Занимает всю высоту ячейки сетки */
 }
 
 .note-card:hover:not(.correct):not(.wrong):not(.clef-card) {
@@ -338,16 +338,18 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef, gameStore.version
   align-items: center;
   justify-content: center;
   gap: 4px;
+  width: 100%;
+  height: 100%;
 }
 
 .clef-symbol {
-  font-size: 48px;
+  font-size: clamp(32px, 8vw, 56px); /* Адаптивный размер ключа */
   color: #6b5b95;
   line-height: 1;
 }
 
 .clef-label {
-  font-size: 10px;
+  font-size: clamp(8px, 2vw, 11px);
   color: #6b5b95;
   font-weight: 600;
   text-align: center;
@@ -359,17 +361,12 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef, gameStore.version
   75% { transform: translateX(4px); }
 }
 
-.note-image {
-  width: 100px;
-  height: 100px;
+.note-image,
+.note-canvas {
+  width: 100%;
+  height: 100%;
   display: block;
   object-fit: contain;
-}
-
-.note-canvas {
-  width: 100px;
-  height: 100px;
-  display: block;
 }
 
 .note-label {
@@ -378,9 +375,9 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef, gameStore.version
   left: 50%;
   transform: translateX(-50%);
   background: rgba(255, 255, 255, 0.95);
-  padding: 2px 8px;
-  border-radius: 8px;
-  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: clamp(8px, 2.5vw, 12px); /* Адаптивный шрифт */
   font-weight: 700;
   font-style: italic;
   color: #374151;
@@ -390,17 +387,20 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef, gameStore.version
   border: 1px solid rgba(255, 255, 255, 0.5);
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
+  max-width: 90%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .note-label .accidental {
-  font-size: 12px;
+  font-size: clamp(10px, 3vw, 14px);
   font-weight: bold;
   font-style: normal;
 }
 
 .note-label .octave {
-  font-size: 9px;
+  font-size: clamp(7px, 2vw, 9px);
   font-weight: 600;
   opacity: 0.7;
   font-style: normal;
@@ -433,39 +433,20 @@ watch(() => [props.note, gameStore.difficulty, gameStore.clef, gameStore.version
   transform: translateX(-50%) translateY(-6px);
 }
 
+/* Мобильная адаптация специально для поля 5x5 */
 @media screen and (max-width: 480px) {
+  .grid-5 {
+    gap: 4px; /* Уменьшаем отступы между карточками на телефоне */
+  }
+
   .note-card {
     padding: 2px;
     border-radius: 8px;
-    max-width: 90px;
-  }
-
-  .note-image,
-  .note-canvas {
-    width: 80px;
-    height: 80px;
   }
 
   .note-label {
-    font-size: 9px;
-    padding: 2px 6px;
     bottom: 2px;
-  }
-
-  .note-label .accidental {
-    font-size: 10px;
-  }
-
-  .note-label .octave {
-    font-size: 8px;
-  }
-
-  .clef-symbol {
-    font-size: 36px;
-  }
-
-  .clef-label {
-    font-size: 8px;
+    padding: 1px 4px;
   }
 }
 </style>
